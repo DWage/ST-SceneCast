@@ -1,0 +1,10 @@
+{
+    "display_name": "SceneCast Portrait Stage",
+    "name": "scenecast_stage",
+    "author": "DWage",
+    "version": "1.0.0",
+    "description": "Dynamic character portraits on a stage",
+    "repo": "https://github.com/SillyTavern/SillyTavern",
+    "js": "index.js",
+    "css": "style.css"
+}

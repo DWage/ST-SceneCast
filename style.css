@@ -1,0 +1,181 @@
+.scast-stage {
+    position: fixed;
+    top: 55px;
+    bottom: 75px;
+    left: 0;
+    width: 300px;
+    pointer-events: none;
+    z-index: 500;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.scast-card {
+    position: relative;
+    width: 100%;
+    height: 180px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+    pointer-events: auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.scast-card-bg {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: cover;
+    filter: blur(20px) brightness(0.4);
+    z-index: 1;
+}
+
+.scast-card-fg {
+    position: relative;
+    width: 100%; height: 100%;
+    object-fit: contain;
+    z-index: 2;
+}
+
+.scast-card-info {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    z-index: 3;
+    padding: 10px;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    text-align: center;
+}
+
+.scast-name {
+    color: #fff;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.scast-card-close {
+    position: absolute;
+    top: 8px; right: 8px;
+    z-index: 10;
+    background: rgba(255, 50, 50, 0.4);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px; height: 24px;
+    cursor: pointer;
+    display: none;
+}
+
+.scast-card:hover .scast-card-close {
+    display: block;
+}
+
+#scast-panel-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 6000;
+    background: rgba(0, 0, 0, 0.65);
+    align-items: center; justify-content: center;
+    padding: 24px;
+}
+
+#scast-panel-overlay.visible { display: flex; }
+
+#scast-panel {
+    width: 800px;
+    height: 600px;
+    background: #1e1e24;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    display: flex; flex-direction: column;
+}
+
+#scast-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+#scast-panel-close {
+    background: transparent; color: #fff; border: none; cursor: pointer;
+}
+
+#scast-panel-body {
+    flex: 1; display: flex; min-height: 0;
+}
+
+#scast-roster-pane {
+    width: 300px;
+    display: flex; flex-direction: column;
+    border-right: 1px solid rgba(255,255,255,0.1);
+}
+
+#scast-roster-toolbar {
+    display: flex; gap: 6px; padding: 10px;
+}
+
+#scast-roster-grid {
+    flex: 1; overflow-y: auto; padding: 10px;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+    align-content: start;
+}
+
+.scast-roster-tile {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px; border-radius: 8px; cursor: pointer;
+    background: rgba(255,255,255,0.05);
+    position: relative;
+}
+
+.scast-roster-tile[data-selected="true"] {
+    background: rgba(76,175,255,0.2);
+    border: 1px solid rgba(76,175,255,0.5);
+}
+
+.scast-roster-tile-thumb {
+    width: 60px; height: 60px; border-radius: 50%; overflow: hidden;
+}
+
+.scast-roster-tile-thumb img {
+    width: 100%; height: 100%; object-fit: cover;
+}
+
+.scast-roster-tile-name {
+    font-size: 11px;
+    text-align: center;
+}
+
+.scast-roster-tile-delete {
+    position: absolute; top: 4px; right: 4px;
+    background: rgba(0,0,0,0.5); color: #fff; border: none;
+    border-radius: 50%; width: 16px; height: 16px; font-size: 10px;
+    cursor: pointer; display: none;
+}
+
+.scast-roster-tile:hover .scast-roster-tile-delete {
+    display: block;
+}
+
+#scast-editor-pane {
+    flex: 1; padding: 20px;
+}
+
+.scast-editor-layout {
+    display: flex; gap: 20px;
+}
+
+.scast-preview-stage {
+    width: 150px; height: 200px;
+    background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden;
+    cursor: pointer;
+}
+
+.scast-preview-stage img {
+    width: 100%; height: 100%; object-fit: cover;
+}
+
+.scast-editor-form {
+    flex: 1;
+}
