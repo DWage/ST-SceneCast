@@ -2,17 +2,28 @@ import { loadConfig, getEffectiveCastCap } from './config.js';
 import { parseTriggerList } from './utils.js';
 import { activeCast, queueStagePaint } from './stage.js';
 
-export function evaluateTrigger(text, triggerStr, caseSensitive) {
+export function countTermHits(text, term, caseSensitive) {
+    if (!term) return 0;
+    const body = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const flags = 'gu' + (caseSensitive ? '' : 'i');
+    try {
+        const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])${body}(?![\\p{L}\\p{N}_])`, flags);
+        const found = text.match(pattern);
+        return found ? found.length : 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
+export function evaluateTrigger(text, triggerStr, caseSensitive, needed) {
     const terms = parseTriggerList(triggerStr);
     if (terms.length === 0) return false;
-    const flags = caseSensitive ? 'g' : 'gi';
-    
+    let total = 0;
     for (const term of terms) {
-        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, flags + 'u');
-        if (pattern.test(text)) return true;
+        total += countTermHits(text, term, caseSensitive);
+        if (total >= needed) return true;
     }
-    return false;
+    return total >= needed;
 }
 
 export function processIncomingMessage(messageText) {
@@ -26,22 +37,24 @@ export function processIncomingMessage(messageText) {
         const member = state.cast[castIdx];
         if (!member.portrait || member.active === false) continue;
 
-        if (!evaluateTrigger(messageText, member.triggers, state.matchCaseSensitive)) continue;
+        const needed = member.hitsRequired || 1;
+        if (!evaluateTrigger(messageText, member.triggers, state.matchCaseSensitive, needed)) continue;
 
         matchedThisMessage.add(castIdx);
 
         if (activeCast.has(castIdx)) {
-            activeCast.get(castIdx).missCounter = 0;
+            const seat = activeCast.get(castIdx);
+            seat.missCounter = 0;
         } else {
             if (cap <= 0 || activeCast.size >= cap) continue;
-            activeCast.set(castIdx, { castIdx, missCounter: 0 });
+            activeCast.set(castIdx, { castIdx, artIdx: member.lastArtIdx || 0, missCounter: 0 });
         }
     }
 
     if (state.dismissMode === 'replies') {
         const expired = [];
         for (const [castIdx, seat] of activeCast) {
-            if (matchedThisMessage.has(castIdx)) continue;
+            if (matchedThisMessage.has(castIdx)) { seat.missCounter = 0; continue; }
             seat.missCounter = (seat.missCounter || 0) + 1;
             if (state.keepAliveReplies > 0 && seat.missCounter <= state.keepAliveReplies) continue;
             expired.push(castIdx);
