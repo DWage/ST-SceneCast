@@ -1,7 +1,20 @@
+export function announce(message) {
+    if (typeof toastr !== 'undefined' && toastr.info) {
+        toastr.info(message);
+    } else {
+        console.log(`[SceneCast] ${message}`);
+    }
+}
+
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+
 export function toSafeMarkup(str) {
     if (!str) return '';
-    const escapes = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
-    return str.replace(/[&<>"]/g, ch => escapes[ch]);
+    return str.replace(/[&<>"]/g, ch => HTML_ESCAPES[ch]);
+}
+
+export function sanitizeForFilename(str) {
+    return (str || '').replace(/[\\/:*?"<>|]/g, '_').trim();
 }
 
 export function parseTriggerList(str) {
@@ -16,6 +29,17 @@ export function debounce(fn, wait) {
     };
 }
 
+export function attachOutsideClickToClose(overlay, closeFn) {
+    let downOnOverlay = false;
+    overlay.addEventListener('mousedown', (e) => {
+        downOnOverlay = (e.target === overlay);
+    });
+    overlay.addEventListener('mouseup', (e) => {
+        if (downOnOverlay && e.target === overlay) closeFn();
+        downOnOverlay = false;
+    });
+}
+
 const MAX_LONG_SIDE = 1280;
 const JPEG_QUALITY = 0.88;
 
@@ -28,12 +52,15 @@ function mimeToFormat(mimeType) {
     if (!mimeType) return 'png';
     if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'jpg';
     if (mimeType.includes('png')) return 'png';
+    if (mimeType.includes('gif')) return 'gif';
     if (mimeType.includes('webp')) return 'webp';
+    if (mimeType.includes('bmp')) return 'bmp';
     return 'png';
 }
 
 export async function compressImageFile(file) {
     const passthroughFormat = extensionFromFilename(file?.name) || mimeToFormat(file?.type);
+
     if (!file || !file.type || !file.type.startsWith('image/')) {
         return { blob: file, format: passthroughFormat };
     }
@@ -108,14 +135,20 @@ export async function uploadImageToServer(fileOrBlob, subfolder) {
         }),
     });
 
-    if (!response.ok) throw new Error('Upload failed');
+    if (!response.ok) {
+        let detail = '';
+        try { detail = await response.text(); } catch (e) {}
+        console.error('[SceneCast] Upload rejected by server:', response.status, detail);
+        throw new Error(`Upload failed: HTTP ${response.status}${detail ? ` — ${detail}` : ''}`);
+    }
     const data = await response.json();
-    if (!data?.path) throw new Error('No path returned');
+    if (!data?.path) throw new Error('Upload succeeded but no path was returned');
     return data.path;
 }
 
 export async function deleteImageFromServer(path) {
-    if (!path || !path.includes('scenecast')) return false;
+    if (!path || typeof path !== 'string') return false;
+    if (!path.includes('scenecast')) return false;
     try {
         const ctx = SillyTavern.getContext();
         const response = await fetch('/api/images/delete', {
@@ -128,8 +161,35 @@ export async function deleteImageFromServer(path) {
         });
         return response.ok;
     } catch (e) {
+        console.warn('[SceneCast] Failed to delete server image:', path, e);
         return false;
     }
+}
+
+export async function listServerImages(folder) {
+    const ctx = SillyTavern.getContext();
+    const response = await fetch('/api/images/list', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...ctx.getRequestHeaders(),
+        },
+        body: JSON.stringify({ folder, sortField: 'date', sortOrder: 'desc' }),
+    });
+    if (!response.ok) {
+        let detail = '';
+        try { detail = await response.text(); } catch (e) {}
+        throw new Error(`HTTP ${response.status}${detail ? ` — ${detail}` : ''}`);
+    }
+    const data = await response.json();
+    return (Array.isArray(data) ? data : []).map(item => {
+        if (typeof item === 'string') {
+            return { filename: item, path: `user/images/${folder}/${item}` };
+        }
+        const rawPath = item.path || item.url || '';
+        const filename = rawPath.split('/').pop() || item.name || item.filename || 'image';
+        return { filename, path: rawPath || `user/images/${folder}/${filename}` };
+    });
 }
 
 export function isServerImagePath(value) {

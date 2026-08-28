@@ -1,6 +1,10 @@
-export const CONFIG_KEY = 'scenecast_stage';
-export const IMAGE_SUBFOLDER = 'scenecast';
+import { parseTriggerList } from './utils.js';
+
+const CONFIG_KEY = 'scenecast_stage';
+
 export const TRAY_CAP = 12;
+
+export const IMAGE_SUBFOLDER = 'scenecast';
 
 export const STAGE_MODES = [
     { value: 'bento-fit', label: '1. Bento Grid' },
@@ -9,6 +13,39 @@ export const STAGE_MODES = [
     { value: 'accordion', label: '4. Vertical Accordion' },
     { value: 'organic', label: '5. Organic Blobs' },
     { value: 'manga', label: '6. Manga Cut-In' },
+    { value: 'cyber', label: '7. Cyberpunk HUD' },
+    { value: 'aurora', label: '8. Aurora Glass' },
+    { value: 'polaroid', label: '9. Polaroid Scrapbook' },
+    { value: 'holo', label: '10. Holographic Foil' },
+    { value: 'neon', label: '11. Neon Pulse' },
+];
+
+export const STAGE_EFFECTS = [
+    { value: 'none', label: 'None' },
+    { value: 'sparkle', label: 'Sparkle' },
+    { value: 'grain', label: 'Film Grain' },
+    { value: 'vignette', label: 'Vignette' },
+    { value: 'scanlines', label: 'Scanlines' },
+];
+
+export const DISMISS_MODES = [
+    { value: 'replies', label: 'By reply count' },
+    { value: 'time', label: 'By time (seconds)' },
+    { value: 'manual', label: 'Manual only (never auto-dismisses)' },
+];
+
+export const DISMISS_HINTS = {
+    replies: 'The card stays on stage until this many AI replies pass without that character being mentioned again. 0 = remove them the instant they stop being mentioned.',
+    time: 'The card disappears this many seconds after the character was last mentioned, no matter how many replies happen in that window.',
+    manual: 'Cards never disappear on their own — only clicking the ✕ on the card (or Clear All) removes them.',
+};
+
+export const EXIT_STYLES = [
+    { value: 'fade', label: 'Fade & Shrink' },
+    { value: 'dissolve', label: 'Dissolve (blur)' },
+    { value: 'slide', label: 'Slide to side' },
+    { value: 'drop', label: 'Drop & Fade' },
+    { value: 'shatter', label: 'Shatter' },
 ];
 
 export const STAGE_SIDES = [
@@ -17,57 +54,72 @@ export const STAGE_SIDES = [
     { value: 'right', label: 'Right only' },
 ];
 
-export const DISMISS_MODES = [
-    { value: 'replies', label: 'By reply count' },
-    { value: 'manual', label: 'Manual only' },
-];
-
-export const EXIT_STYLES = [
-    { value: 'fade', label: 'Fade & Shrink' },
-    { value: 'dissolve', label: 'Dissolve' },
-    { value: 'slide', label: 'Slide' },
-];
-
 export const DEFAULT_STATE = Object.freeze({
     isActive: true,
-    profiles: {},
+    profiles: { prof_default: { name: 'Default', cast: [] } },
     characterProfileMap: {},
     fallbackProfileId: 'prof_default',
     keepAliveReplies: 0,
     matchCaseSensitive: false,
     dismissMode: 'replies',
+    dismissSeconds: 8,
     stageMode: 'bento',
+    stageFx: 'none',
     stageSide: 'both',
     maxCastSize: 7,
     exitAnim: 'fade',
+    hideDetailsBlocks: true,
+    ignoreQuotedNames: false,
+    ignoreMarkerStart: '',
+    ignoreMarkerEnd: '',
+    timelineSync: false,
+    timelineLookback: 4,
     accentHueShift: 0,
+    reduceMotion: false,
     cardScale: 1,
     showInfoBar: true,
     showVariantTag: true,
+    heartLiked: false,
 });
 
 export const PLACEHOLDER_ART = 'data:image/svg+xml;utf8,' + encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 260">' +
-    '<rect width="200" height="260" fill="#4facfe"/>' +
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+    '<stop offset="0%" stop-color="#00f2fe"/><stop offset="100%" stop-color="#4facfe"/>' +
+    '</linearGradient></defs>' +
+    '<rect width="200" height="260" fill="url(#g)"/>' +
     '<circle cx="100" cy="100" r="42" fill="rgba(255,255,255,0.65)"/>' +
     '<path d="M40 230 Q100 150 160 230 Z" fill="rgba(255,255,255,0.65)"/>' +
     '</svg>'
 );
 
-let runtimeActiveProfileIds = [];
-let lastSyncedKey = undefined;
+export function getEffectiveCastCap(state) {
+    const raw = Math.max(0, Math.min(TRAY_CAP, state.maxCastSize ?? TRAY_CAP));
+    if (state.stageSide === 'left' || state.stageSide === 'right') {
+        return Math.ceil(raw / 2);
+    }
+    return raw;
+}
+
+function generateMemberId() {
+    return 'mem_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
 
 export function normalizeMember(member) {
     if (member.__normalized) return member;
+
+    if (member.id === undefined) member.id = generateMemberId();
+
     if (!Array.isArray(member.variants)) member.variants = [];
     if (member.hitsRequired === undefined) member.hitsRequired = 1;
+    if (member.useRegex === undefined) member.useRegex = false;
+    if (member.excludeTriggers === undefined) member.excludeTriggers = '';
     if (member.sideBias === undefined) member.sideBias = 'auto';
     if (member.active === undefined) member.active = true;
     if (member.displayName === undefined) member.displayName = '';
     if (member.triggers === undefined) member.triggers = '';
     if (member.portrait === undefined) member.portrait = '';
     if (member.lastArtIdx === undefined) member.lastArtIdx = 0;
-    
     for (const variant of member.variants) {
         if (variant.label === undefined) variant.label = variant.tag || '';
         if (variant.tag === undefined) variant.tag = variant.label || '';
@@ -79,22 +131,8 @@ export function normalizeMember(member) {
     return member;
 }
 
-function migrateFlatCastIfNeeded(raw) {
-    if (raw.cast && Array.isArray(raw.cast)) {
-        const legacyCast = raw.cast;
-        delete raw.cast;
-        raw.profiles = { 'prof_default': { name: 'Default', cast: legacyCast } };
-        raw.fallbackProfileId = 'prof_default';
-    }
-    if (!raw.profiles || Object.keys(raw.profiles).length === 0) {
-        raw.profiles = raw.profiles || {};
-        raw.profiles['prof_default'] = { name: 'Default', cast: [] };
-        raw.fallbackProfileId = 'prof_default';
-    }
-    if (!raw.fallbackProfileId || !raw.profiles[raw.fallbackProfileId]) {
-        raw.fallbackProfileId = Object.keys(raw.profiles)[0];
-    }
-}
+let runtimeActiveProfileIds = [];
+let lastSyncedKey = undefined;
 
 function loadRawState() {
     const { extensionSettings } = SillyTavern.getContext();
@@ -107,7 +145,6 @@ function loadRawState() {
             stored[key] = structuredClone(DEFAULT_STATE[key]);
         }
     }
-    migrateFlatCastIfNeeded(stored);
     return stored;
 }
 
@@ -128,32 +165,10 @@ function ensureCastAccessor(raw) {
             }
             return merged;
         },
-        set() {}
+        set() {
+            console.warn('[SceneCast] Ignored attempt to assign state.cast directly — use getProfileCast(profileId) instead.');
+        },
     });
-}
-
-export function loadConfig() {
-    const raw = loadRawState();
-    const key = resolveCharacterKey();
-    if (key !== lastSyncedKey) {
-        refreshActiveProfileForCurrentChat(raw);
-        lastSyncedKey = key;
-    }
-    ensureCastAccessor(raw);
-    raw.cast.forEach(normalizeMember);
-    return raw;
-}
-
-export function persistConfig() {
-    SillyTavern.getContext().saveSettingsDebounced();
-}
-
-export function getEffectiveCastCap(state) {
-    const raw = Math.max(0, Math.min(TRAY_CAP, state.maxCastSize ?? TRAY_CAP));
-    if (state.stageSide === 'left' || state.stageSide === 'right') {
-        return Math.ceil(raw / 2);
-    }
-    return raw;
 }
 
 export function resolveCharacterKey() {
@@ -175,6 +190,22 @@ export function resolveCharacterDisplayName() {
     const chId = ctx.characterId;
     if (chId !== undefined && chId !== null && ctx.characters && ctx.characters[chId]) {
         return ctx.characters[chId].name || null;
+    }
+    return null;
+}
+
+export function resolveDisplayNameForKey(key) {
+    if (!key) return null;
+    const ctx = SillyTavern.getContext();
+    if (key.startsWith('group:')) {
+        const groupId = key.slice('group:'.length);
+        const group = (ctx.groups || []).find(g => g.id === groupId);
+        return group?.name || null;
+    }
+    if (key.startsWith('char:')) {
+        const avatar = key.slice('char:'.length);
+        const found = (ctx.characters || []).find(c => c.avatar === avatar);
+        return found?.name || null;
     }
     return null;
 }
@@ -201,6 +232,29 @@ export function getActiveProfileId() {
 export function getActiveProfileIds() {
     if (!runtimeActiveProfileIds || runtimeActiveProfileIds.length === 0) refreshActiveProfileForCurrentChat();
     return runtimeActiveProfileIds.slice();
+}
+
+export function loadConfig() {
+    const raw = loadRawState();
+    const key = resolveCharacterKey();
+    if (key !== lastSyncedKey) {
+        refreshActiveProfileForCurrentChat(raw);
+        lastSyncedKey = key;
+    }
+    ensureCastAccessor(raw);
+    raw.cast.forEach(normalizeMember);
+    return raw;
+}
+
+export function persistConfig() {
+    SillyTavern.getContext().saveSettingsDebounced();
+}
+
+export function resolveDisplayName(castIdx, stateOverride) {
+    const state = stateOverride || loadConfig();
+    const member = state.cast[castIdx];
+    if (!member) return '';
+    return member.displayName || parseTriggerList(member.triggers)[0] || '';
 }
 
 export function getProfileCast(profileId) {
@@ -249,7 +303,8 @@ export function renameProfile(id, name) {
 
 export function deleteProfile(id) {
     const raw = loadRawState();
-    if (!raw.profiles[id] || Object.keys(raw.profiles).length <= 1) return false;
+    if (!raw.profiles[id]) return false;
+    if (Object.keys(raw.profiles).length <= 1) return false;
 
     const removedCast = raw.profiles[id].cast || [];
     delete raw.profiles[id];
@@ -260,8 +315,11 @@ export function deleteProfile(id) {
         else delete raw.characterProfileMap[key];
     }
     if (raw.fallbackProfileId === id) raw.fallbackProfileId = Object.keys(raw.profiles)[0];
-    if (runtimeActiveProfileIds.includes(id)) {
-        runtimeActiveProfileIds = [raw.fallbackProfileId];
+    if (runtimeActiveProfileIds && runtimeActiveProfileIds.includes(id)) {
+        runtimeActiveProfileIds = runtimeActiveProfileIds.filter(pid => pid !== id);
+        if (runtimeActiveProfileIds.length === 0 && raw.fallbackProfileId) {
+            runtimeActiveProfileIds = [raw.fallbackProfileId];
+        }
     }
 
     persistConfig();
@@ -291,9 +349,87 @@ export function unbindCharacterFromProfile(profileId) {
     return true;
 }
 
+export function unbindProfileFromCharacterKey(key, profileId) {
+    const raw = loadRawState();
+    if (!key || !raw.characterProfileMap[key]) return false;
+    const filtered = raw.characterProfileMap[key].filter(id => id !== profileId);
+    if (filtered.length > 0) raw.characterProfileMap[key] = filtered;
+    else delete raw.characterProfileMap[key];
+    persistConfig();
+    return true;
+}
+
 export function getCurrentBinding() {
     const raw = loadRawState();
     const key = resolveCharacterKey();
     const profileIds = key ? (raw.characterProfileMap[key] || []) : [];
     return { key, profileIds, isBound: profileIds.length > 0 };
+}
+
+export function getCharacterKeysBoundToProfile(profileId) {
+    const raw = loadRawState();
+    const keys = [];
+    for (const [key, ids] of Object.entries(raw.characterProfileMap)) {
+        if (Array.isArray(ids) && ids.includes(profileId)) keys.push(key);
+    }
+    return keys;
+}
+
+export function moveCastMember(fromProfileId, index, toProfileId) {
+    if (!fromProfileId || !toProfileId || fromProfileId === toProfileId) return false;
+    const raw = loadRawState();
+    const fromCast = raw.profiles[fromProfileId]?.cast;
+    if (!fromCast || !fromCast[index]) return false;
+    if (!raw.profiles[toProfileId]) raw.profiles[toProfileId] = { name: 'New Profile', cast: [] };
+
+    const [member] = fromCast.splice(index, 1);
+    raw.profiles[toProfileId].cast.push(member);
+    persistConfig();
+    return true;
+}
+
+function normalizeImagePath(path) {
+    if (!path || typeof path !== 'string') return '';
+    return path.replace(/\\/g, '/').replace(/^\/+/, '').split('?')[0];
+}
+
+function pathsReferSameImage(a, b) {
+    if (!a || !b) return false;
+    return normalizeImagePath(a) === normalizeImagePath(b);
+}
+
+export function clearPortraitReferencesEverywhere(imagePath) {
+    if (!imagePath) return 0;
+    const raw = loadRawState();
+    let cleared = 0;
+    for (const profile of Object.values(raw.profiles)) {
+        for (const member of (profile.cast || [])) {
+            if (pathsReferSameImage(member.portrait, imagePath)) { member.portrait = ''; cleared++; }
+            for (const v of (member.variants || [])) {
+                if (pathsReferSameImage(v.portrait, imagePath)) { v.portrait = ''; cleared++; }
+            }
+        }
+    }
+    if (cleared > 0) persistConfig();
+    return cleared;
+}
+
+export function findPortraitReferences(imagePath) {
+    const raw = loadRawState();
+    const refs = [];
+    for (const profile of Object.values(raw.profiles)) {
+        for (const member of (profile.cast || [])) {
+            const name = member.displayName || (member.triggers || '').split(',')[0]?.trim() || 'Unnamed';
+            if (pathsReferSameImage(member.portrait, imagePath)) refs.push(`${profile.name}: ${name}`);
+            for (const v of (member.variants || [])) {
+                if (pathsReferSameImage(v.portrait, imagePath)) refs.push(`${profile.name}: ${name} (${v.label || v.tag || 'variant'})`);
+            }
+        }
+    }
+    return refs;
+}
+
+export function findMergedCastIndexById(state, id) {
+    if (!id) return -1;
+    return state.cast.findIndex(m => m.id === id);
 }
