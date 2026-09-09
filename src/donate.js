@@ -19,7 +19,7 @@ function mountDonateModal() {
             <div class="scast-donate-heart"><i class="fa-solid fa-heart"></i></div>
             <h3 class="scast-donate-title">Thank you for using SceneCast!</h3>
             <p class="scast-donate-text">
-                If it made your roleplay more fun, feel free to support the project below — totally optional, but every little bit helps me a lot.
+                If it made your roleplay more fun, feel free to support the project below — totally optional, and there's no "right" amount. Every bit is appreciated.
             </p>
 
             <div class="scast-donate-qr-wrap">
@@ -65,24 +65,32 @@ function closeDonateModal() {
     document.getElementById('scast-donate-overlay')?.classList.remove('visible');
 }
 
-export function openDonateModal() {
+export function openDonateModal(markLiked = true) {
     mountDonateModal();
     document.getElementById('scast-donate-overlay').classList.add('visible');
 
-    const state = loadConfig();
-    if (!state.heartLiked) {
-        state.heartLiked = true;
-        persistConfig();
-        refreshAllHeartButtons();
+    if (markLiked) {
+        const state = loadConfig();
+        if (!state.heartLiked) {
+            state.heartLiked = true;
+            persistConfig();
+            refreshAllHeartButtons();
+        }
     }
 }
 
 const heartButtons = new Set();
 
+const HEART_SVG_OUTLINE = `<svg viewBox="-30 -30 572 572" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="34" stroke-linejoin="round" style="display:block;"><path d="M462.3 62.6C407.5 15.9 326 24.3 275.7 76.2L256 96.5l-19.7-20.3C186.1 24.3 104.5 15.9 49.7 62.6c-62.8 53.6-66.1 149.8-9.9 207.9l193.5 199.8c12.5 12.9 32.8 12.9 45.3 0l193.5-199.8c56.3-58.1 53-154.3-9.8-207.9z"/></svg>`;
+
+const HEART_SVG_FILLED = `<svg viewBox="-30 -30 572 572" width="1em" height="1em" fill="currentColor" style="display:block;"><path d="M462.3 62.6C407.5 15.9 326 24.3 275.7 76.2L256 96.5l-19.7-20.3C186.1 24.3 104.5 15.9 49.7 62.6c-62.8 53.6-66.1 149.8-9.9 207.9l193.5 199.8c12.5 12.9 32.8 12.9 45.3 0l193.5-199.8c56.3-58.1 53-154.3-9.8-207.9z"/></svg>`;
+
 function syncHeartButton(el) {
     const state = loadConfig();
-    el.classList.toggle('liked', !!state.heartLiked);
-    el.title = state.heartLiked ? 'Glad you like it! ♥' : 'Enjoying SceneCast?';
+    const liked = !!state.heartLiked;
+    el.classList.toggle('liked', liked);
+    el.title = liked ? 'Glad you like it! ♥' : 'Enjoying SceneCast?';
+    el.innerHTML = liked ? HEART_SVG_FILLED : HEART_SVG_OUTLINE;
 }
 
 function refreshAllHeartButtons() {
@@ -99,7 +107,6 @@ export function createHeartButton() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'scast-heart-btn';
-    btn.innerHTML = '<i class="fa-solid fa-heart"></i>';
     btn.addEventListener('click', (e) => { e.stopPropagation(); openDonateModal(); });
     heartButtons.add(btn);
     syncHeartButton(btn);

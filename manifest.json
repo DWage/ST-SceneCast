@@ -4,7 +4,7 @@
     "author": "DWage",
     "version": "1.0.0",
     "description": "Dynamic character portraits on a stage",
-    "repo": "https://github.com/SillyTavern/SillyTavern",
+    "repo": "https://github.com/DWage/ST-SceneCast",
     "js": "index.js",
     "css": "style.css"
 }

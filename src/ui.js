@@ -18,6 +18,7 @@ import {
 import { safeDeleteServerImage } from './image-guard.js';
 import { themedConfirm, themedAlert, themedPrompt } from './dialog.js';
 import { createHeartButton } from './donate.js';
+import { openOnboardingGuide } from './onboarding.js';
 
 let panelViewingProfileId = null;
 let panelSelectedIdx = null;
@@ -39,6 +40,7 @@ export function mountDirectorPanel() {
                 <b><i class="fa-solid fa-clapperboard scast-panel-header-icon"></i> Cast Manager</b>
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <span id="scast-panel-heart-slot"></span>
+                    <button id="scast-panel-guide" title="Open the guide"><i class="fa-solid fa-circle-question"></i></button>
                     <button id="scast-panel-close" title="Close"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
@@ -90,6 +92,7 @@ export function mountDirectorPanel() {
     overlay.querySelector('#scast-panel-heart-slot').appendChild(createHeartButton());
 
     overlay.querySelector('#scast-panel-close').addEventListener('click', closeDirectorPanel);
+    overlay.querySelector('#scast-panel-guide').addEventListener('click', () => openOnboardingGuide());
     overlay.querySelector('#scast-roster-images').addEventListener('click', openImageManager);
     attachOutsideClickToClose(overlay, closeDirectorPanel);
 
@@ -255,6 +258,10 @@ export function openDirectorPanel() {
     renderProfileBar();
     renderRosterGrid();
     renderEditorPane(null);
+
+    if (!loadConfig().hasSeenGuide) {
+        openOnboardingGuide();
+    }
 }
 
 function closeDirectorPanel() {

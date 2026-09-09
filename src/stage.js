@@ -6,6 +6,8 @@ export const activeCast = new Map();
 const aspectMemo = new Map();
 
 let seatOrderCounter = 0;
+const stickySideMemory = new Map();  // castIdx -> 'left' | 'right'
+const stickyOrderMemory = new Map(); // castIdx -> order number
 
 export const EXIT_KEYFRAMES = {
     fade: () => [
@@ -58,21 +60,26 @@ function collectArtworkList(castIdx, state) {
     return list;
 }
 
-export function cycleArtwork(castIdx, direction) {
-    const seat = activeCast.get(castIdx);
+export function cycleArtwork(castIdx, direction, targetMap = activeCast) {
+    const seat = targetMap.get(castIdx);
     if (!seat) return;
     const state = loadConfig();
     const artwork = collectArtworkList(castIdx, state);
     if (artwork.length <= 1) return;
+
     seat.artIdx = (seat.artIdx + direction + artwork.length) % artwork.length;
 
     const member = state.cast[castIdx];
     if (member) {
-        member.lastArtIdx = seat.artIdx;
+        member.lastArtIdx = seat.artIdx; 
         persistConfig();
     }
 
-    queueStagePaint();
+    if (targetMap === activeCast) {
+        queueStagePaint();
+    } else {
+        paintStage(targetMap);
+    }
 }
 
 export function dismissCastMember(castIdx) {
@@ -82,6 +89,8 @@ export function dismissCastMember(castIdx) {
 
 export function resetStage() {
     activeCast.clear();
+    stickySideMemory.clear();
+    stickyOrderMemory.clear();
     seatOrderCounter = 0;
     paintStage();
 }
@@ -202,14 +211,14 @@ function detachAndFadeOut(el, container, side) {
     playExitAnimThenRemove(el, side);
 }
 
-function buildArtworkNav(seat, artwork) {
+function buildArtworkNav(seat, artwork, castSource) {
     const nav = document.createElement('div');
     nav.className = 'scast-card-nav';
 
     const prev = document.createElement('button');
     prev.type = 'button';
     prev.innerHTML = '<i class="fa-solid fa-chevron-left"></i>';
-    prev.onclick = (e) => { e.stopPropagation(); cycleArtwork(seat.castIdx, -1); };
+    prev.onclick = (e) => { e.stopPropagation(); cycleArtwork(seat.castIdx, -1, castSource); };
 
     const label = document.createElement('span');
     label.textContent = `${seat.artIdx + 1}/${artwork.length}`;
@@ -217,7 +226,7 @@ function buildArtworkNav(seat, artwork) {
     const next = document.createElement('button');
     next.type = 'button';
     next.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
-    next.onclick = (e) => { e.stopPropagation(); cycleArtwork(seat.castIdx, 1); };
+    next.onclick = (e) => { e.stopPropagation(); cycleArtwork(seat.castIdx, 1, castSource); };
 
     nav.append(prev, label, next);
     return nav;
@@ -256,7 +265,7 @@ function composeInfoMarkup(name, tag, showVariantTag) {
 }
 
 function composeCardElement(item) {
-    const { seat, artwork, art, src, span, safeToCrop, isFresh, interactive, name, showVariantTag } = item;
+    const { seat, artwork, art, src, span, safeToCrop, isFresh, interactive, name, showVariantTag, castSource } = item;
 
     const card = document.createElement('div');
     card.className = 'scast-card';
@@ -291,8 +300,9 @@ function composeCardElement(item) {
 
     card.append(bg, fg, fx, info);
 
+    if (artwork.length > 1) card.appendChild(buildArtworkNav(seat, artwork, castSource));
+
     if (interactive) {
-        if (artwork.length > 1) card.appendChild(buildArtworkNav(seat, artwork));
         card.appendChild(buildHoldButton(seat));
         card.appendChild(buildDismissButton(seat));
     } else {
@@ -303,7 +313,7 @@ function composeCardElement(item) {
 }
 
 function syncCardElement(item, card) {
-    const { seat, artwork, art, src, span, safeToCrop, isFresh, interactive, name, showVariantTag } = item;
+    const { seat, artwork, art, src, span, safeToCrop, isFresh, interactive, name, showVariantTag, castSource } = item;
     card.dataset.tileSpan = span;
     card.dataset.cropFit = safeToCrop ? 'smart' : 'contain';
     card.dataset.isFresh = isFresh ? 'true' : 'false';
@@ -311,14 +321,8 @@ function syncCardElement(item, card) {
 
     const bg = card.querySelector('.scast-card-bg');
     const fg = card.querySelector('.scast-card-fg');
-    if (bg && bg.src !== src) {
-        bg.src = src;
-        bg.onerror = () => { if (bg.src !== PLACEHOLDER_ART) bg.src = PLACEHOLDER_ART; };
-    }
-    if (fg && fg.src !== src) {
-        fg.src = src;
-        fg.onerror = () => { if (fg.src !== PLACEHOLDER_ART) fg.src = PLACEHOLDER_ART; };
-    }
+    if (bg && bg.src !== src) { bg.src = src; bg.onerror = () => { if (bg.src !== PLACEHOLDER_ART) bg.src = PLACEHOLDER_ART; }; }
+    if (fg && fg.src !== src) { fg.src = src; fg.onerror = () => { if (fg.src !== PLACEHOLDER_ART) fg.src = PLACEHOLDER_ART; }; }
 
     const info = card.querySelector('.scast-card-info');
     if (info) info.innerHTML = composeInfoMarkup(name, art?.tag || '', showVariantTag);
@@ -331,8 +335,8 @@ function syncCardElement(item, card) {
         card.querySelector('.scast-card-hold')?.remove();
         card.querySelector('.scast-card-close')?.remove();
         card.querySelector('.scast-card-archive-badge')?.remove();
+        if (artwork.length > 1) card.appendChild(buildArtworkNav(seat, artwork, castSource));
         if (interactive) {
-            if (artwork.length > 1) card.appendChild(buildArtworkNav(seat, artwork));
             card.appendChild(buildHoldButton(seat));
             card.appendChild(buildDismissButton(seat));
         } else {
@@ -341,20 +345,14 @@ function syncCardElement(item, card) {
         return;
     }
 
-    if (!interactive) return;
-
-    let nav = card.querySelector('.scast-card-nav');
+    card.querySelector('.scast-card-nav')?.remove();
     if (artwork.length > 1) {
-        if (!nav) {
-            nav = buildArtworkNav(seat, artwork);
-            card.insertBefore(nav, card.querySelector('.scast-card-hold'));
-        } else {
-            const label = nav.querySelector('span');
-            if (label) label.textContent = `${seat.artIdx + 1}/${artwork.length}`;
-        }
-    } else if (nav) {
-        nav.remove();
+        const nav = buildArtworkNav(seat, artwork, castSource);
+        const holdBtn = card.querySelector('.scast-card-hold');
+        holdBtn ? card.insertBefore(nav, holdBtn) : card.appendChild(nav);
     }
+
+    if (!interactive) return;
 
     const holdBtn = card.querySelector('.scast-card-hold');
     if (holdBtn) holdBtn.title = seat.held ? 'Release (allow auto-dismissal again)' : 'Hold (keep on stage until manually removed)';
@@ -377,6 +375,8 @@ function reconcileColumn(container, items, side) {
             liveEls.delete(key);
         }
     }
+
+    container.dataset.tileCount = String(items.length);
 
     for (const item of items) {
         const key = String(item.seat.castIdx);
@@ -416,7 +416,7 @@ function reconcileColumn(container, items, side) {
                     { transform: `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})` },
                     { transform: 'translate(0, 0) scale(1, 1)' },
                 ],
-                { duration: 130, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+                { duration: 60, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
             );
             anim.onfinish = () => { el.style.transformOrigin = prevOrigin; };
             anim.oncancel = () => { el.style.transformOrigin = prevOrigin; };
@@ -482,11 +482,26 @@ export async function paintStage(overrideCast) {
         rightZone.innerHTML = '';
         leftZone.dataset.tileCount = '0';
         rightZone.dataset.tileCount = '0';
+        stickySideMemory.clear();
+        stickyOrderMemory.clear();
         return;
     }
 
+    const currentIds = new Set(seats.map(s => s.castIdx));
+    for (const key of stickySideMemory.keys()) {
+        if (!currentIds.has(key)) stickySideMemory.delete(key);
+    }
+    for (const key of stickyOrderMemory.keys()) {
+        if (!currentIds.has(key)) stickyOrderMemory.delete(key);
+    }
+
     const items = await Promise.all(seats.map(async (seat) => {
-        if (seat.order === undefined) seat.order = seatOrderCounter++;
+        if (seat.order === undefined) {
+            seat.order = stickyOrderMemory.has(seat.castIdx)
+                ? stickyOrderMemory.get(seat.castIdx)
+                : seatOrderCounter++;
+            stickyOrderMemory.set(seat.castIdx, seat.order);
+        }
 
         const artwork = collectArtworkList(seat.castIdx, state);
         const art = artwork[seat.artIdx] || artwork[0];
@@ -502,6 +517,7 @@ export async function paintStage(overrideCast) {
             showVariantTag: state.showVariantTag,
             sideBias: member?.sideBias || 'auto',
             interactive,
+            castSource,
         };
     }));
 
@@ -526,16 +542,24 @@ export async function paintStage(overrideCast) {
 
         const pendingAuto = [];
         for (const item of autoItems) {
-            const stickySide = item.seat.autoSide;
-            if (stickySide === 'left') { leftItems.push(item); leftWeight += item.weight; }
-            else if (stickySide === 'right') { rightItems.push(item); rightWeight += item.weight; }
-            else pendingAuto.push(item);
+            const stickySide = stickySideMemory.get(item.seat.castIdx) ?? item.seat.autoSide;
+            if (stickySide === 'left') {
+                leftItems.push(item); leftWeight += item.weight;
+                stickySideMemory.set(item.seat.castIdx, 'left');
+            } else if (stickySide === 'right') {
+                rightItems.push(item); rightWeight += item.weight;
+                stickySideMemory.set(item.seat.castIdx, 'right');
+            } else {
+                pendingAuto.push(item);
+            }
         }
         for (const item of pendingAuto) {
             if (leftWeight <= rightWeight) {
-                leftItems.push(item); leftWeight += item.weight; item.seat.autoSide = 'left';
+                leftItems.push(item); leftWeight += item.weight;
+                stickySideMemory.set(item.seat.castIdx, 'left');
             } else {
-                rightItems.push(item); rightWeight += item.weight; item.seat.autoSide = 'right';
+                rightItems.push(item); rightWeight += item.weight;
+                stickySideMemory.set(item.seat.castIdx, 'right');
             }
         }
     }
@@ -546,8 +570,8 @@ export async function paintStage(overrideCast) {
     const packedLeft = allocateSpans(leftItems);
     const packedRight = allocateSpans(rightItems);
 
-    leftZone.dataset.tileCount = String(packedLeft.length);
-    rightZone.dataset.tileCount = String(packedRight.length);
+    // leftZone.dataset.tileCount = String(packedLeft.length);
+    // rightZone.dataset.tileCount = String(packedRight.length);
 
     reconcileColumn(rightZone, packedRight, 'right');
     reconcileColumn(leftZone, packedLeft, 'left');

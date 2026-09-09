@@ -72,6 +72,7 @@ export function detachTimelineWatcher() {
     observedNodes = new WeakSet();
     timelineActive = false;
     currentSnapshotMesId = null;
+    lastSnapshotCastKey = null;
     paintStage();
 }
 
@@ -95,6 +96,8 @@ function pickMostVisibleMessage() {
     if (bestEl) buildTimelineSnapshot(bestEl);
 }
 
+let lastSnapshotCastKey = null;
+
 function buildTimelineSnapshot(mesEl) {
     const idAttr = mesEl.getAttribute('mesid');
     if (idAttr === null) return;
@@ -107,6 +110,7 @@ function buildTimelineSnapshot(mesEl) {
 
     if (mesId === chat.length - 1) {
         paintStage();
+        lastSnapshotCastKey = null;
         return;
     }
 
@@ -127,8 +131,8 @@ function buildTimelineSnapshot(mesEl) {
 
     const combinedText = collected.join('\n\n');
     const text = prepareScanText(combinedText, state);
-    const snapshot = new Map();
     const cast = state.cast;
+    const matchedIdx = [];
 
     for (let castIdx = 0; castIdx < cast.length; castIdx++) {
         const member = cast[castIdx];
@@ -138,7 +142,17 @@ function buildTimelineSnapshot(mesEl) {
         if (!evaluateTrigger(text, member.triggers, state.matchCaseSensitive, needed, !!member.useRegex)) continue;
         if (isSuppressed(text, member.excludeTriggers, state.matchCaseSensitive)) continue;
 
-        if (cap <= 0 || snapshot.size >= cap) continue;
+        if (cap <= 0 || matchedIdx.length >= cap) continue;
+        matchedIdx.push(castIdx);
+    }
+
+    const snapshotKey = matchedIdx.join(',');
+    if (snapshotKey === lastSnapshotCastKey) return;
+    lastSnapshotCastKey = snapshotKey;
+
+    const snapshot = new Map();
+    for (const castIdx of matchedIdx) {
+        const member = cast[castIdx];
         snapshot.set(castIdx, { castIdx, artIdx: member.lastArtIdx || 0, missCounter: 0, held: false, lastSeenAt: Date.now() });
     }
 

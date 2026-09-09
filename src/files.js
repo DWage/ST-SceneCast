@@ -1,9 +1,10 @@
-import { loadConfig, persistConfig, normalizeMember, getProfileCast, IMAGE_SUBFOLDER } from './config.js';
+import { persistConfig, normalizeMember, getProfileCast, listProfiles, IMAGE_SUBFOLDER } from './config.js';
 import {
     parseTriggerList, sanitizeForFilename, announce,
     uploadImageToServer, isServerImagePath, toImgSrc,
 } from './utils.js';
 import { safeDeleteServerImage } from './image-guard.js';
+import { buildZip } from './zip-writer.js';
 
 function isTopLevelFile(file) {
     const rel = file.webkitRelativePath || '';
@@ -166,56 +167,76 @@ export async function upsertDroppedArtwork(fileList, profileId) {
     return { created, portraitsUpdated, variantsAdded, variantsUpdated, failed };
 }
 
-async function downloadServerImage(path, baseFilename) {
+
+async function fetchImageBytes(path) {
     const src = toImgSrc(path);
-    const extMatch = /\.(\w+)(?:\?.*)?$/.exec(path);
-    const ext = extMatch ? extMatch[1] : 'png';
-    try {
-        const response = await fetch(src);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = objectUrl;
-        link.download = `${baseFilename}.${ext}`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 200);
-        return true;
-    } catch (e) {
-        console.warn('[SceneCast] export failed for', path, e);
-        return false;
-    }
+    const response = await fetch(src);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
 }
 
 export async function exportCastArtwork(profileId) {
     const cast = getProfileCast(profileId);
-    let count = 0;
-    let failed = 0;
+    const profile = listProfiles().find(p => p.id === profileId);
+    const zipName = `${sanitizeForFilename(profile?.name || 'scenecast')}-export.zip`;
 
+    const entries = [];
     for (const member of cast) {
         const names = parseTriggerList(member.triggers);
         if (names.length === 0) continue;
         const baseName = sanitizeForFilename(names.join('-'));
 
-        if (member.portrait) {
-            if (await downloadServerImage(member.portrait, baseName)) count++;
-            else failed++;
-        }
+        if (member.portrait) entries.push({ path: member.portrait, baseName });
         for (const variant of (member.variants || [])) {
             if (!variant.portrait) continue;
             const slug = sanitizeForFilename((variant.tag || variant.label || 'variant').replace(/\s+/g, '-'));
-            if (await downloadServerImage(variant.portrait, `${baseName}_${slug}`)) count++;
-            else failed++;
+            entries.push({ path: variant.portrait, baseName: `${baseName}_${slug}` });
         }
     }
 
+    if (entries.length === 0) {
+        announce('Nothing to export yet');
+        return 0;
+    }
+
+    const usedNames = new Set();
+    const files = [];
+    let failed = 0;
+
+    for (const { path, baseName } of entries) {
+        try {
+            const data = await fetchImageBytes(path);
+            const extMatch = /\.(\w+)(?:\?.*)?$/.exec(path);
+            const ext = extMatch ? extMatch[1] : 'png';
+
+            let filename = `${baseName}.${ext}`;
+            let n = 2;
+            while (usedNames.has(filename)) filename = `${baseName}-${n++}.${ext}`;
+            usedNames.add(filename);
+
+            files.push({ name: filename, data });
+        } catch (e) {
+            console.warn('[SceneCast] export failed for', path, e);
+            failed++;
+        }
+    }
+
+    if (files.length === 0) {
+        announce(`Export failed for all ${failed} image(s)`);
+        return 0;
+    }
+
+    const zipBlob = buildZip(files);
+    const objectUrl = URL.createObjectURL(zipBlob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = zipName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 200);
+
     const failNote = failed > 0 ? `, ${failed} failed` : '';
-    announce(
-        count > 0
-            ? `Exported ${count} image(s)${failNote} — check your downloads folder`
-            : (failed > 0 ? `Export failed for all ${failed} image(s)` : 'Nothing to export yet')
-    );
-    return count;
+    announce(`Exported ${files.length} image(s) into ${zipName}${failNote}`);
+    return files.length;
 }
