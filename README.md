@@ -5,11 +5,11 @@
 
 A SillyTavern extension that watches the AI's replies and puts character portraits on screen the moment they're mentioned — then takes them away again once they're not part of the scene anymore. 
 
-![SceneCast in action](assets/images/screenshot-example3.png)
+![SceneCast UI](https://github.com/user-attachments/assets/757d4399-596a-412f-bcc7-c8249b87a6c5)
 
-![SceneCast in action](assets/images/screenshot-example1.png)
+![SceneCast stage](https://github.com/user-attachments/assets/c85d261e-7cc9-452c-8359-5b6b119f7180)
 
-![SceneCast in action](assets/images/gif-example.gif)
+![SceneCast in action](https://github.com/user-attachments/assets/3e7abc49-e049-4ecf-adc5-416ff90eb1e8)
 
 ## What it actually does
 
@@ -63,6 +63,8 @@ The Stage Settings panel inside Cast Manager splits into two tabs:
 - **Rules & Triggers** — how cards get dismissed (by reply count, by time, or manually only), how many can be on stage at once, case sensitivity, whether to ignore text inside `<details>` blocks or inside quotes, custom ignore-markers, and scroll-sync lookback depth.
 
 There's also an image browser built in — see everything stored on the server, which cast members are using which file, and clean up anything orphaned.
+
+> **Performance note:** If you're experiencing lag or high resource usage in-browser, consider [TauriTavern](https://github.com/Darkatse/TauriTavern) — a community rewrite of SillyTavern as a native Tauri/Rust desktop app. Same frontend, different (lighter) runtime.
 
 ## Bugs & Feedback
  

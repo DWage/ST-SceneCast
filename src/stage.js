@@ -172,13 +172,22 @@ function motionAllowed() {
 
 function playEntranceAnim(el) {
     if (!motionAllowed()) return;
+    el.classList.add('scast-entering');
     try {
         const anim = el.animate(
             [{ opacity: 0, transform: 'scale(0.85)' }, { opacity: 1, transform: 'scale(1)' }],
             { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: 'forwards' },
         );
-        anim.onfinish = () => anim.cancel();
-    } catch (e) {}
+        anim.onfinish = () => {
+            try { anim.commitStyles(); } catch (e) {}
+            anim.cancel();
+            el.style.removeProperty('transform');
+            el.style.removeProperty('opacity');
+            requestAnimationFrame(() => el.classList.remove('scast-entering'));
+        };
+    } catch (e) {
+        el.classList.remove('scast-entering');
+    }
 }
 
 function playExitAnimThenRemove(el, side) {
@@ -201,6 +210,10 @@ function playExitAnimThenRemove(el, side) {
 function detachAndFadeOut(el, container, side) {
     const containerRect = container.getBoundingClientRect();
     const elRect = el.getBoundingClientRect();
+
+    el.style.gridColumn = 'auto';
+    el.style.gridRow = 'auto';
+
     el.style.position = 'absolute';
     el.style.left = `${elRect.left - containerRect.left}px`;
     el.style.top = `${elRect.top - containerRect.top}px`;

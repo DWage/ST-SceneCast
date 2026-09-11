@@ -204,8 +204,24 @@
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
     pointer-events: auto;
     cursor: crosshair;
-    will-change: transform;
+    will-change: transform, opacity;
+}
+
+[data-hue-active="true"] .scast-card {
     filter: hue-rotate(var(--scast-hue-deg, 0deg));
+}
+
+@keyframes scastCardEnter {
+    from { opacity: 0; transform: scale(0.85); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.scast-card.scast-entering {
+    animation: scastCardEnter 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.scast-card.scast-entering {
+    transition: none !important;
 }
 
 .scast-card-bg {
