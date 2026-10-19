@@ -3292,3 +3292,33 @@
     margin-right: 4px;
     opacity: 0.8;
 }
+
+#scast-fab {
+    position: fixed;
+    right: 16px;
+    bottom: var(--scast-fab-bottom, 84px);
+    z-index: 2000;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: linear-gradient(135deg, #00f2fe, #4facfe);
+    color: #fff;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), 0 0 0 0 rgba(79, 172, 254, 0.5);
+    opacity: 0.55;
+    transition: opacity .2s, transform .2s, box-shadow .2s;
+    -webkit-tap-highlight-color: transparent;
+}
+#scast-fab:hover,
+#scast-fab:focus-visible {
+    opacity: 1;
+    transform: scale(1.1) rotate(-6deg);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 0 6px rgba(79, 172, 254, 0.18);
+}
+#scast-fab:active { transform: scale(0.94); }
+body:has(#scast-panel-overlay.visible) #scast-fab { display: none; }

@@ -1131,6 +1131,35 @@ async function renderImageManagerGrid() {
     }
 }
 
+let fabResizeObserver = null;
+
+function trackSendFormHeight() {
+    const form = document.getElementById('send_form');
+    if (!form || fabResizeObserver) return;
+    const update = () => document.documentElement.style.setProperty(
+        '--scast-fab-bottom', `${form.offsetHeight + 14}px`);
+    fabResizeObserver = new ResizeObserver(update);
+    fabResizeObserver.observe(form);
+    update();
+}
+
+export function refreshQuickButton() {
+    const state = loadConfig();
+    let btn = document.getElementById('scast-fab');
+    if (!state.showQuickButton) { btn?.remove(); return; }
+    if (btn) return;
+
+    btn = document.createElement('button');
+    btn.id = 'scast-fab';
+    btn.type = 'button';
+    btn.title = 'Open SceneCast Cast Manager';
+    btn.setAttribute('aria-label', 'Open SceneCast Cast Manager');
+    btn.innerHTML = '<i class="fa-solid fa-clapperboard"></i>';
+    btn.addEventListener('click', openDirectorPanel);
+    document.body.appendChild(btn);
+    trackSendFormHeight();
+}
+
 function composeSidebarMarkup(profileNamesText) {
     return `
 <div id="scast-sidebar-panel" class="inline-drawer" style="margin-bottom:10px;">
@@ -1153,6 +1182,9 @@ function composeSidebarMarkup(profileNamesText) {
             </div>
             <div class="scast-row" style="margin-bottom: 4px;">
                 <button id="scast_open_panel" class="menu_button"><i class="fa-solid fa-clapperboard" style="margin-right: 6px;"></i>Open Cast Manager</button>
+            </div>
+            <div class="scast-row">
+                <label class="scast-inline-check"><input type="checkbox" id="scast_fab_toggle" /> Show quick-open button</label>
             </div>
         </div>
     </div>
@@ -1178,6 +1210,14 @@ export function mountSidebarPanel() {
     target.appendChild(wrap.firstElementChild);
 
     document.getElementById('scast-sidebar-heart-slot').appendChild(createHeartButton());
+
+    const fabToggle = document.getElementById('scast_fab_toggle');
+    fabToggle.checked = state.showQuickButton;
+    fabToggle.addEventListener('change', e => {
+        state.showQuickButton = e.target.checked;
+        persistConfig();
+        refreshQuickButton();
+    });
 
     const activeToggle = document.getElementById('scast_active_toggle');
     activeToggle.checked = state.isActive;

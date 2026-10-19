@@ -1,5 +1,5 @@
 import { loadConfig, refreshActiveProfileForCurrentChat } from './config.js';
-import { mountSidebarPanel } from './ui.js';
+import { mountSidebarPanel, refreshQuickButton } from './ui.js';
 import { startDismissalClock, resetStage } from './stage.js';
 import { attachTimelineWatcher, detachTimelineWatcher } from './timeline.js';
 import { processIncomingMessage } from './scanner.js';
@@ -9,6 +9,7 @@ const { eventSource, event_types } = SillyTavern.getContext();
 eventSource.on(event_types.APP_READY, () => {
     refreshActiveProfileForCurrentChat();
     mountSidebarPanel();
+    refreshQuickButton();
     startDismissalClock();
     attachTimelineWatcher();
 });

@@ -88,6 +88,7 @@ export const DEFAULT_STATE = Object.freeze({
     showVariantTag: false,
     heartLiked: false,
     hasSeenGuide: false,
+    showQuickButton: true,
 });
 
 export const PLACEHOLDER_ART = 'data:image/svg+xml;utf8,' + encodeURIComponent(
